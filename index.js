@@ -7,6 +7,7 @@ const authRoutes = require("./routes/auth.routes");
 const formRoutes = require("./routes/form.routes");
 const questionRoutes = require("./routes/question.routes");
 const responseRoutes = require("./routes/responses.routes");
+const approvalroutes = require("./routes/approval.routes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,6 +22,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/forms", formRoutes);
 app.use("/api/questions", questionRoutes);
 app.use("/api/response", responseRoutes);
+app.use("/api/approval", approvalroutes);
 
 const startServer = async () => {
   try {

@@ -13,6 +13,4 @@ router.put("/edit", auth(2), formController.updateForm);
 
 router.put("/delete", auth(2), formController.deleteForm);
 
-router.post("/flow", auth(2), formController.createApprovalFlow);
-
 module.exports = router;
