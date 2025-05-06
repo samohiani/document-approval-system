@@ -53,11 +53,11 @@ exports.submitResponse = async (req, res) => {
 
 // Retrieve all responses for a form (optionally, you could add filtering for a specific user)
 exports.getResponsesForForm = async (req, res) => {
-  const { form_id } = req.params;
+  const { id } = req.params;
 
   try {
     const responses = await FormResponse.findAll({
-      where: { form_id: form_id },
+      where: { form_id: id },
       include: [
         {
           model: ResponseDetail,
