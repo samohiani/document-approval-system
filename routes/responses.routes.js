@@ -5,7 +5,8 @@ const auth = require("../middleware/auth");
 
 router.post("/:form_id", auth(1), responseController.submitResponse);
 
-// Get all responses for a specific form (could be restricted to admin or teacher roles)
-router.get("/:id", auth(), responseController.getResponsesForForm);
+router.get("/", auth(), responseController.getResponsesForForm);
+
+router.get("/user", auth(1), responseController.getUserFormSubmissions);
 
 module.exports = router;
