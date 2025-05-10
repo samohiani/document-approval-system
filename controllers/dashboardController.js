@@ -1,4 +1,10 @@
-const { Approval, FormResponse, User } = require("../models");
+const {
+  Approval,
+  ApprovalFlow,
+  Form,
+  FormResponse,
+  User,
+} = require("../models");
 const { Op } = require("sequelize");
 
 exports.getAdminDashboardCounts = async (req, res) => {
@@ -75,7 +81,7 @@ exports.getHODDashboardStats = async (req, res, next) => {
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
-    // Step 4: Fetch approvals related to those form responses & needing HOD
+    //Fetch approvals related to those form responses & needing HOD
     const approvals = await Approval.findAll({
       where: {
         response_id: { [Op.in]: formResponseIds },
@@ -83,7 +89,7 @@ exports.getHODDashboardStats = async (req, res, next) => {
       },
     });
 
-    // Step 5: Categorize the approvals
+    //Categorize the approvals
     const pendingApprovals = approvals.filter(
       (app) => app.status === "pending"
     );
@@ -111,5 +117,78 @@ exports.getHODDashboardStats = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+exports.getStudentDashboardStats = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    //Get student's own form submissions and count statuses
+    const responses = await FormResponse.findAll({
+      where: { user_id: userId },
+      attributes: ["status"],
+    });
+
+    const statusCount = responses.reduce(
+      (acc, { status }) => {
+        const key = status.toLowerCase();
+        if (acc[key] !== undefined) acc[key]++;
+        return acc;
+      },
+      { pending: 0, approved: 0, rejected: 0 }
+    );
+
+    //Identify forms that students can initiate
+    const approvalFlows = await ApprovalFlow.findAll();
+    const availableFormIds = [];
+
+    approvalFlows.forEach((flow) => {
+      try {
+        let flowDef = flow.flow_definition;
+
+        if (typeof flowDef === "string") {
+          flowDef = JSON.parse(flowDef);
+        }
+
+        if (
+          Array.isArray(flowDef) &&
+          flowDef[0]?.role_required?.toLowerCase() === "student"
+        ) {
+          availableFormIds.push(flow.form_id);
+        }
+      } catch (err) {
+        console.error(
+          `Error parsing flow_definition for ApprovalFlow ID ${flow.id}:`,
+          err.message
+        );
+      }
+    });
+
+    // 3. Fetch available forms for the student
+    const availableForms = await Form.findAll({
+      where: {
+        id: {
+          [Op.in]: availableFormIds,
+        },
+      },
+    });
+
+    res.status(200).json({
+      status: "success",
+      message: "Student dashboard stats retrieved successfully",
+      data: {
+        pending: statusCount.pending,
+        approved: statusCount.approved,
+        rejected: statusCount.rejected,
+        availableForms: availableForms.length,
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching student dashboard stats:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch student dashboard data.",
+    });
   }
 };

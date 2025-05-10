@@ -7,6 +7,6 @@ router.post("/:form_id", auth(1), responseController.submitResponse);
 
 router.get("/", auth(), responseController.getResponsesForForm);
 
-router.get("/user", auth(1), responseController.getUserFormSubmissions);
+router.get("/user", auth(), responseController.getUserFormSubmissions);
 
 module.exports = router;

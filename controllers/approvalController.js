@@ -4,7 +4,6 @@ const ApprovalFlow = require("../models/approvalFlow");
 exports.createApprovalFlow = async (req, res) => {
   const { form_id, flow_definition } = req.body;
 
-  // Validate input
   if (
     !flow_definition ||
     !Array.isArray(flow_definition) ||
@@ -42,6 +41,31 @@ exports.createApprovalFlow = async (req, res) => {
     return res.status(500).json({
       status: "error",
       message: "An error occurred while creating the approval flow",
+      data: [],
+    });
+  }
+};
+
+exports.getApprovalFlows = async (req, res) => {
+  try {
+    const approvals = await ApprovalFlow.findAll({
+      include: [
+        {
+          model: Form,
+          as: "form",
+        },
+      ],
+    });
+    return res.status(200).json({
+      status: "success",
+      message: "Forms and approvals retrieved successfully",
+      data: approvals,
+    });
+  } catch (error) {
+    console.error("Error fetching forms:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "An error occurred while retrieving forms",
       data: [],
     });
   }

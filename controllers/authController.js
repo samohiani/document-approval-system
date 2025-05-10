@@ -46,7 +46,7 @@ exports.login = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role_id: user.role_id },
       process.env.JWT_SECRET_KEY,
-      { expiresIn: "1h" }
+      { expiresIn: "7h" }
     );
 
     // Construct the response data with user details and role name
@@ -123,7 +123,7 @@ exports.signup = async (req, res) => {
     const token = jwt.sign(
       { id: newUser.id, role_id: newUser.role_id },
       process.env.JWT_SECRET_KEY,
-      { expiresIn: "1h" }
+      { expiresIn: "7h" }
     );
 
     const responseData = {
