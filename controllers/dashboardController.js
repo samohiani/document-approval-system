@@ -187,7 +187,7 @@ exports.getStudentDashboardStats = async (req, res) => {
   } catch (err) {
     console.error("Error fetching student dashboard stats:", err);
     res.status(500).json({
-      success: false,
+      status: "error",
       message: "Failed to fetch student dashboard data.",
     });
   }

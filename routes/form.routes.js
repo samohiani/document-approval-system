@@ -13,4 +13,6 @@ router.put("/edit", auth(2), formController.updateForm);
 
 router.put("/delete", auth(2), formController.deleteForm);
 
+router.post("/:form_id/submit", auth([1, 3, 7]), formController.submitResponse);
+
 module.exports = router;
