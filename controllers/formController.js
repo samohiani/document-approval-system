@@ -284,3 +284,84 @@ exports.submitResponse = async (req, res) => {
     });
   }
 };
+
+exports.getFormProgress = async (req, res) => {
+  try {
+    const { response_id } = req.params;
+    const user_id = req.user.id;
+
+    // Fetch the form response
+    const formResponse = await FormResponse.findOne({
+      where: { id: response_id, user_id },
+      include: [
+        { model: Form, as: "form", attributes: ["title", "description"] },
+      ],
+    });
+
+    if (!formResponse) {
+      return res.status(404).json({
+        status: "error",
+        message: "Form response not found.",
+        data: [],
+      });
+    }
+
+    // Fetch answers
+    const answers = await ResponseDetail.findAll({
+      where: { response_id },
+      include: [
+        { model: Question, as: "question", attributes: ["question_text"] },
+      ],
+    });
+
+    // Fetch approvals
+    const approvals = await Approval.findAll({
+      where: { response_id },
+      include: [
+        {
+          model: User,
+          as: "approver",
+          attributes: ["id", "first_name", "last_name", "email", "role_id"],
+        },
+      ],
+      order: [["step_number", "ASC"]],
+    });
+
+    const progress = approvals.map((appr) => ({
+      step_number: appr.step_number,
+      role_required: appr.role_required,
+      approver: appr.approver
+        ? {
+            id: appr.approver.id,
+            name: appr.approver.full_name,
+            email: appr.approver.email,
+          }
+        : null,
+      status: appr.status,
+      comment: appr.comment,
+      updated_on: appr.updated_on,
+    }));
+
+    return res.status(200).json({
+      status: "success",
+      message: "Form progress retrieved successfully",
+      data: {
+        form: formResponse.form,
+        submitted_on: formResponse.created_on,
+        status: formResponse.status,
+        answers: answers.map((a) => ({
+          question: a.question?.question_text,
+          answer: a.answer_text,
+        })),
+        approvals: progress,
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching form progress:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error while fetching form progress",
+      data: [],
+    });
+  }
+};

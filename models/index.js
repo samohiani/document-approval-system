@@ -6,7 +6,7 @@ const Department = require("./department");
 const Form = require("./form");
 const Question = require("./question");
 const FormResponse = require("./formResponse");
-const ResponseDetail = require("./responseDetail");
+const ResponseDetail = require("./ResponseDetail");
 const Approval = require("./approval");
 
 // Role and User
@@ -54,6 +54,8 @@ ResponseDetail.belongsTo(Question, {
   as: "question",
 });
 
+Approval.belongsTo(User, { foreignKey: "approver_id", as: "approver" });
+User.hasMany(Approval, { foreignKey: "approver_id", as: "approvals" });
 module.exports = {
   Role,
   User,
