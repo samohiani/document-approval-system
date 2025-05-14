@@ -1,5 +1,5 @@
 const FormResponse = require("../models/formResponse");
-const ResponseDetail = require("../models/responseDetail");
+const ResponseDetail = require("../models/ResponseDetail");
 const Form = require("../models/form");
 
 exports.getUserFormSubmissions = async (req, res) => {

@@ -365,3 +365,46 @@ exports.getFormProgress = async (req, res) => {
     });
   }
 };
+
+exports.getInitiatableForms = async (req, res) => {
+  try {
+    const user = req.user;
+    const role = await Role.findByPk(user.role_id);
+    if (!role) {
+      return res
+        .status(400)
+        .json({ status: "error", message: "Invalid user role" });
+    }
+
+    let contextualRole = role.name.toLowerCase();
+    if (contextualRole === "pg coordinator") {
+      if (user.department_id) {
+        contextualRole = "departmental pg coordinator";
+      } else if (user.college_id) {
+        contextualRole = "college pg coordinator";
+      }
+    }
+
+    const forms = await Form.findAll({
+      include: [{ model: ApprovalFlow, as: "approvalFlow" }],
+    });
+
+    const initiatableForms = forms.filter((form) => {
+      const flow = form.approvalFlow?.flow_definition;
+      if (!flow || !Array.isArray(flow)) return false;
+      return flow[0]?.role_required.toLowerCase() === contextualRole;
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Initiatable forms retrieved",
+      data: initiatableForms,
+    });
+  } catch (error) {
+    console.error("Error fetching initiatable forms:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+    });
+  }
+};

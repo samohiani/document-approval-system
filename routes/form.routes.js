@@ -17,4 +17,6 @@ router.post("/:form_id/submit", auth([1, 3, 7]), formController.submitResponse);
 
 router.get("/:response_id/progress", auth(), formController.getFormProgress);
 
+router.post("/initiatable", auth(), formController.getInitiatableForms);
+
 module.exports = router;
