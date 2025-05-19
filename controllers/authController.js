@@ -42,7 +42,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Generate a token (expires in 1 hour)
     const token = jwt.sign(
       { id: user.id, role_id: user.role_id },
       process.env.JWT_SECRET_KEY,
@@ -119,7 +118,6 @@ exports.signup = async (req, res) => {
       department_id: department_id || null,
     });
 
-    // Generate a JWT token (expires in 1 hour)
     const token = jwt.sign(
       { id: newUser.id, role_id: newUser.role_id },
       process.env.JWT_SECRET_KEY,
