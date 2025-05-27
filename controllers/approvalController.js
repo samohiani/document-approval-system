@@ -51,6 +51,58 @@ exports.createApprovalFlow = async (req, res) => {
   }
 };
 
+exports.updateFormApprovalFlow = async (req, res) => {
+  const { form_id, flow_definition } = req.body;
+
+  if (!form_id) {
+    return res.status(400).json({
+      status: "error",
+      message: "Form ID is required",
+      data: [],
+    });
+  }
+
+  if (
+    !flow_definition ||
+    !Array.isArray(flow_definition) ||
+    flow_definition.length === 0
+  ) {
+    return res.status(400).json({
+      status: "error",
+      message: "A valid flow_definition array is required",
+      data: [],
+    });
+  }
+
+  try {
+    const approvalFlow = await ApprovalFlow.findOne({ where: { form_id } });
+
+    if (!approvalFlow) {
+      return res.status(404).json({
+        status: "error",
+        message: "Approval flow not found for the given form ID",
+        data: [],
+      });
+    }
+
+    approvalFlow.flow_definition = flow_definition;
+    await approvalFlow.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Approval flow updated successfully",
+      data: approvalFlow,
+    });
+  } catch (error) {
+    console.error("Error updating approval flow:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "An error occurred while updating the approval flow",
+      data: [],
+    });
+  }
+};
+
 exports.getApprovalFlows = async (req, res) => {
   try {
     const approvals = await ApprovalFlow.findAll({
@@ -182,6 +234,44 @@ exports.handleApproval = async (req, res) => {
   } catch (err) {
     console.error(err.message);
     return res.status(500).json({ message: "Approval failed." });
+  }
+};
+
+exports.getApprovalFlowByFormId = async (req, res) => {
+  const { form_id } = req.params;
+
+  try {
+    const approvalFlow = await ApprovalFlow.findOne({
+      where: { form_id },
+      include: [
+        {
+          model: Form,
+          as: "form",
+          attributes: ["id", "title", "description"],
+        },
+      ],
+    });
+
+    if (!approvalFlow) {
+      return res.status(404).json({
+        status: "error",
+        message: "Approval flow not found for the given form ID",
+        data: null,
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Approval flow retrieved successfully",
+      data: approvalFlow,
+    });
+  } catch (error) {
+    console.error("Error retrieving approval flow by form ID:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "An error occurred while retrieving the approval flow",
+      data: null,
+    });
   }
 };
 
