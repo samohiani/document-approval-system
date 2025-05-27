@@ -15,9 +15,9 @@ async function seed() {
       Role.create({ name: "dean" }),
       Role.create({ name: "hod" }),
       Role.create({ name: "college dean" }),
-      Role.create({ name: "dean SPS" }),
-      Role.create({ name: "sub-dean SPS" }),
-      Role.create({ name: "PG coordinator" }),
+      Role.create({ name: "dean sps" }),
+      Role.create({ name: "sub-dean sps" }),
+      Role.create({ name: "pg coordinator" }),
     ]);
     console.log("Roles created.");
 
@@ -102,7 +102,7 @@ async function seed() {
       last_name: "SPS",
       email: "deansps@example.com",
       password: hashedPassword,
-      role_id: roles.find((r) => r.name === "dean SPS").id,
+      role_id: roles.find((r) => r.name === "dean sps").id,
       college_id: colleges[1].id,
     });
 
@@ -112,7 +112,7 @@ async function seed() {
       last_name: "Dean",
       email: "subdean@example.com",
       password: hashedPassword,
-      role_id: roles.find((r) => r.name === "sub-dean SPS").id,
+      role_id: roles.find((r) => r.name === "sub-dean sps").id,
       college_id: colleges[2].id,
     });
 
@@ -122,7 +122,7 @@ async function seed() {
       last_name: "Coordinator",
       email: "pgcoordinator@example.com",
       password: hashedPassword,
-      role_id: roles.find((r) => r.name === "PG coordinator").id,
+      role_id: roles.find((r) => r.name === "pg coordinator").id,
       college_id: colleges[0].id,
     });
 
