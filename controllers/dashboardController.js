@@ -4,395 +4,270 @@ const {
   Form,
   FormResponse,
   User,
-  Department,
+  Role,
 } = require("../models");
 const { Op } = require("sequelize");
 
-exports.getAdminDashboardCounts = async (req, res) => {
-  try {
-    const totalUsers = await User.count();
+// Helper function for Admin Dashboard
+async function getAdminDashboardData() {
+  const totalUsers = await User.count();
+  const totalForms = await Form.count({ where: { deleted_flag: false } });
 
-    const pendingFormsCount = await FormResponse.count({
-      where: { status: "pending" },
-    });
+  const formSubmissionsSummary = {
+    total: await FormResponse.count(),
+    pending: await FormResponse.count({ where: { status: "pending" } }),
+    approved: await FormResponse.count({ where: { status: "approved" } }),
+    rejected: await FormResponse.count({ where: { status: "rejected" } }),
+  };
 
-    const approvedFormsCount = await FormResponse.count({
-      where: { status: "approved" },
-    });
-
-    const rejectedFormsCount = await FormResponse.count({
-      where: { status: "rejected" },
-    });
-
-    return res.status(200).json({
-      status: "success",
-      message: "Admin dashboard details retrieved successfully",
-      data: {
-        totalUsers: totalUsers,
-        pendingForms: pendingFormsCount,
-        approvedForms: approvedFormsCount,
-        rejectedForms: rejectedFormsCount,
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const recentSubmissionsCount = await FormResponse.count({
+    where: {
+      created_on: {
+        [Op.gte]: sevenDaysAgo,
       },
+    },
+  });
+
+  // Calculate average processing time for completed forms
+  // This is a more complex query, averaging the difference between created_on and updated_on for approved/rejected
+  const completedResponsesTimes = await FormResponse.findAll({
+    where: { status: { [Op.in]: ["approved", "rejected"] } },
+    attributes: ["created_on", "updated_on"],
+  });
+
+  let totalProcessingTime = 0;
+  let processedCount = 0;
+  completedResponsesTimes.forEach((res) => {
+    if (res.updated_on && res.created_on) {
+      totalProcessingTime +=
+        new Date(res.updated_on).getTime() - new Date(res.created_on).getTime();
+      processedCount++;
+    }
+  });
+  const averageProcessingTimeMs =
+    processedCount > 0 ? totalProcessingTime / processedCount : 0;
+  // Convert to a more readable format, e.g., hours or days
+  const averageProcessingTimeHours = averageProcessingTimeMs / (1000 * 60 * 60);
+
+  return {
+    totalUsers,
+    totalForms,
+    formSubmissionsSummary,
+    recentSubmissionsCount,
+    averageProcessingTimeHours: parseFloat(
+      averageProcessingTimeHours.toFixed(2)
+    ),
+  };
+}
+
+// Helper function for Student Dashboard
+async function getStudentDashboardData(userId) {
+  const myTotalSubmissions = await FormResponse.count({
+    where: { user_id: userId },
+  });
+  const mySubmissionsStatus = {
+    pending: await FormResponse.count({
+      where: { user_id: userId, status: "pending" },
+    }),
+    approved: await FormResponse.count({
+      where: { user_id: userId, status: "approved" },
+    }),
+    rejected: await FormResponse.count({
+      where: { user_id: userId, status: "rejected" },
+    }),
+  };
+
+  // Simplified initiatable forms count (actual logic might be more complex as in formController)
+  // This requires knowing the user's role and potentially department/college
+  // For a basic version, we can count forms that have an approval flow defined
+  // A more accurate count would replicate the logic from formController.getInitiatableForms
+  const user = await User.findByPk(userId, {
+    include: [{ model: Role, as: "role" }],
+  });
+  let initiatableFormsCount = 0;
+  if (user && user.role) {
+    const allForms = await Form.findAll({
+      include: [
+        {
+          model: ApprovalFlow,
+          as: "approvalFlow",
+          where: { flow_definition: { [Op.ne]: null } },
+          required: true,
+        },
+      ],
+      where: { deleted_flag: false },
     });
-  } catch (error) {
-    console.error("Error fetching form", error);
-    return res.status(500).json({
-      status: "error",
-      message: "An error occurred while retrieving the details",
-      data: [],
+
+    let contextualRole = user.role.name.toLowerCase();
+    if (contextualRole === "pg coordinator") {
+      // Example contextual role logic
+      if (user.department_id) contextualRole = "departmental pg coordinator";
+      else if (user.college_id) contextualRole = "college pg coordinator";
+    }
+
+    initiatableFormsCount = allForms.filter((form) => {
+      try {
+        let flowDef = form.approvalFlow?.flow_definition;
+        if (typeof flowDef === "string") flowDef = JSON.parse(flowDef);
+        return (
+          Array.isArray(flowDef) &&
+          flowDef.length > 0 &&
+          flowDef[0]?.role_required?.toLowerCase() === contextualRole
+        );
+      } catch (e) {
+        return false;
+      }
+    }).length;
+  }
+
+  return {
+    myTotalSubmissions,
+    mySubmissionsStatus,
+    initiatableFormsCount,
+  };
+}
+
+// Helper function for Approver Dashboard
+async function getApproverDashboardData(
+  userId,
+  userRole,
+  userDepartmentId,
+  userCollegeId
+) {
+  const myPendingApprovalsCount = await Approval.count({
+    where: { approver_id: userId, status: "pending" },
+  });
+
+  const myApprovalStats = {
+    approvedByMe: await Approval.count({
+      where: { approver_id: userId, status: "approved" },
+    }),
+    rejectedByMe: await Approval.count({
+      where: { approver_id: userId, status: "rejected" },
+    }),
+  };
+
+  const processedApprovalsTimes = await Approval.findAll({
+    where: {
+      approver_id: userId,
+      status: { [Op.in]: ["approved", "rejected"] },
+    },
+    attributes: ["created_on", "updated_on"],
+  });
+  let totalApprovalProcessTime = 0;
+  let processedApprovalCount = 0;
+  processedApprovalsTimes.forEach((appr) => {
+    if (appr.updated_on && appr.created_on) {
+      totalApprovalProcessTime +=
+        new Date(appr.updated_on).getTime() -
+        new Date(appr.created_on).getTime();
+      processedApprovalCount++;
+    }
+  });
+  const averageApprovalTimeMs =
+    processedApprovalCount > 0
+      ? totalApprovalProcessTime / processedApprovalCount
+      : 0;
+  const averageApprovalTimeHours = averageApprovalTimeMs / (1000 * 60 * 60);
+
+  const data = {
+    myPendingApprovalsCount,
+    myApprovalStats,
+    averageApprovalTimeHours: parseFloat(averageApprovalTimeHours.toFixed(2)),
+  };
+
+  // Contextual data for HOD (role_id 4)
+  if (userRole.name.toLowerCase() === "hod" && userDepartmentId) {
+    data.departmentSubmissionsCount = await FormResponse.count({
+      include: [
+        {
+          model: User,
+          as: "user",
+          where: { department_id: userDepartmentId },
+        },
+      ],
     });
   }
-};
 
-exports.getHODDashboardStats = async (req, res, next) => {
-  try {
-    const hodId = req.user.id;
-
-    // Step 1: Get HOD's department
-    const hod = await User.findByPk(hodId);
-    if (!hod)
-      return res
-        .status(404)
-        .json({ status: "error", message: "HOD not found" });
-
-    const departmentId = hod.department_id;
-
-    // Step 2: Get all users in HOD's department
-    const deptUsers = await User.findAll({
-      where: { department_id: departmentId },
-      attributes: ["id"],
+  // Contextual data for Deans (role_id 3 for general Dean, 5 for College Dean)
+  if (
+    (userRole.name.toLowerCase() === "dean" ||
+      userRole.name.toLowerCase() === "college dean") &&
+    userCollegeId
+  ) {
+    data.collegeSubmissionsCount = await FormResponse.count({
+      include: [
+        {
+          model: User,
+          as: "user",
+          where: { college_id: userCollegeId },
+        },
+      ],
     });
-
-    const deptUserIds = deptUsers.map((user) => user.id);
-
-    // Step 3: Get FormResponses submitted by users in that department
-    const formResponses = await FormResponse.findAll({
-      where: {
-        user_id: { [Op.in]: deptUserIds },
-      },
-      attributes: ["id"],
-    });
-
-    const formResponseIds = formResponses.map((fr) => fr.id);
-
-    // Get today's date boundaries
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-
-    //Fetch approvals related to those form responses & needing HOD
-    const approvals = await Approval.findAll({
-      where: {
-        response_id: { [Op.in]: formResponseIds },
-        approver_id: hodId, // Assigned specifically to this HOD
-      },
-    });
-
-    //Categorize the approvals
-    const pendingApprovals = approvals.filter(
-      (app) => app.status === "pending"
-    );
-    const approvedToday = approvals.filter(
-      (app) =>
-        app.status === "approved" &&
-        new Date(app.updatedAt) >= startOfToday &&
-        new Date(app.updatedAt) <= endOfToday
-    );
-    const rejectedToday = approvals.filter(
-      (app) =>
-        app.status === "rejected" &&
-        new Date(app.updatedAt) >= startOfToday &&
-        new Date(app.updatedAt) <= endOfToday
-    );
-
-    return res.status(200).json({
-      status: "success",
-      message: "HOD dashboard stats retrieved successfully",
-      data: {
-        pendingApprovals: pendingApprovals.length,
-        approvedToday: approvedToday.length,
-        rejectedToday: rejectedToday.length,
-      },
-    });
-  } catch (error) {
-    next(error);
   }
-};
 
-exports.getStudentDashboardStats = async (req, res) => {
+  return data;
+}
+
+exports.getDashboardData = async (req, res) => {
   try {
     const userId = req.user.id;
-
-    //Get student's own form submissions and count statuses
-    const responses = await FormResponse.findAll({
-      where: { user_id: userId },
-      attributes: ["status"],
+    const user = await User.findByPk(userId, {
+      include: [{ model: Role, as: "role" }],
     });
 
-    const statusCount = responses.reduce(
-      (acc, { status }) => {
-        const key = status.toLowerCase();
-        if (acc[key] !== undefined) acc[key]++;
-        return acc;
-      },
-      { pending: 0, approved: 0, rejected: 0 }
-    );
-
-    //Identify forms that students can initiate
-    const approvalFlows = await ApprovalFlow.findAll();
-    const availableFormIds = [];
-
-    approvalFlows.forEach((flow) => {
-      try {
-        let flowDef = flow.flow_definition;
-
-        if (typeof flowDef === "string") {
-          flowDef = JSON.parse(flowDef);
-        }
-
-        if (
-          Array.isArray(flowDef) &&
-          flowDef[0]?.role_required?.toLowerCase() === "student"
-        ) {
-          availableFormIds.push(flow.form_id);
-        }
-      } catch (err) {
-        console.error(
-          `Error parsing flow_definition for ApprovalFlow ID ${flow.id}:`,
-          err.message
-        );
-      }
-    });
-
-    // 3. Fetch available forms for the student
-    const availableForms = await Form.findAll({
-      where: {
-        id: {
-          [Op.in]: availableFormIds,
-        },
-      },
-    });
-
-    res.status(200).json({
-      status: "success",
-      message: "Student dashboard stats retrieved successfully",
-      data: {
-        pending: statusCount.pending,
-        approved: statusCount.approved,
-        rejected: statusCount.rejected,
-        availableForms: availableForms.length,
-      },
-    });
-  } catch (err) {
-    console.error("Error fetching student dashboard stats:", err);
-    res.status(500).json({
-      status: "error",
-      message: "Failed to fetch student dashboard data.",
-    });
-  }
-};
-
-exports.getFacultyDashboardStats = async (req, res) => {
-  try {
-    const deanId = req.user.id;
-
-    // Get dean's faculty
-    const dean = await User.findByPk(deanId, {
-      include: [
-        {
-          model: Department,
-          as: "faculty",
-        },
-      ],
-    });
-
-    if (!dean || !dean.faculty) {
-      return res.status(404).json({
-        status: "error",
-        message: "Faculty not found",
-      });
+    if (!user || !user.role) {
+      return res
+        .status(403)
+        .json({ status: "error", message: "User role not found or invalid." });
     }
 
-    // Get all departments in the faculty
-    const facultyDepartments = await Department.findAll({
-      where: { faculty_id: dean.faculty.id },
-    });
+    let dashboardData;
 
-    const departmentIds = facultyDepartments.map((dept) => dept.id);
-
-    // Get form statistics for each department
-    const departmentStats = await Promise.all(
-      departmentIds.map(async (deptId) => {
-        const department = facultyDepartments.find((d) => d.id === deptId);
-
-        // Get all form responses from users in this department
-        const responses = await FormResponse.findAll({
-          include: [
-            {
-              model: User,
-              where: {
-                department_id: deptId,
-              },
-            },
-          ],
-        });
-
-        const stats = responses.reduce(
-          (acc, response) => {
-            const status = response.status.toLowerCase();
-            acc.Submitted++;
-            if (status === "approved") acc.Approved++;
-            if (status === "rejected") acc.Rejected++;
-            return acc;
-          },
-          { name: department.name, Submitted: 0, Approved: 0, Rejected: 0 }
+    switch (
+      user.role.name.toLowerCase() // Switched to use role name for clarity
+    ) {
+      case "admin": // role_id 2
+        dashboardData = await getAdminDashboardData();
+        break;
+      case "student": // role_id 1
+        dashboardData = await getStudentDashboardData(userId);
+        break;
+      case "dean": // role_id 3
+      case "hod": // role_id 4
+      case "college dean": // role_id 5
+      case "dean sps": // role_id 6
+      case "sub-dean sps": // role_id 7
+      case "pg coordinator": // role_id 8
+        dashboardData = await getApproverDashboardData(
+          userId,
+          user.role,
+          user.department_id,
+          user.college_id
         );
-
-        return stats;
-      })
-    );
-
-    return res.status(200).json({
-      status: "success",
-      message: "Faculty dashboard stats retrieved successfully",
-      data: {
-        departments: departmentStats,
-      },
-    });
-  } catch (err) {
-    console.error("Error fetching faculty dashboard stats:", err);
-    return res.status(500).json({
-      status: "error",
-      message: "Failed to fetch faculty dashboard data",
-    });
-  }
-};
-
-exports.getStaffDashboardStats = async (req, res) => {
-  try {
-    const staffId = req.user.id;
-    const now = new Date();
-
-    // Get last 4 weeks of data
-    const weeks = [];
-    for (let i = 0; i < 4; i++) {
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - (i * 7 + 7));
-      weekStart.setHours(0, 0, 0, 0);
-
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 7);
-      weekEnd.setHours(23, 59, 59, 999);
-
-      // Get all approvals in this week
-      const weekResponses = await FormResponse.findAll({
-        include: [
-          {
-            model: Approval,
-            where: {
-              approver_id: staffId,
-              updatedAt: {
-                [Op.between]: [weekStart, weekEnd],
-              },
-            },
-          },
-        ],
-      });
-
-      const weekStats = weekResponses.reduce(
-        (acc, response) => {
-          const approval = response.Approvals[0];
-          acc.Received++;
-          if (approval.status === "approved") acc.Approved++;
-          if (approval.status === "rejected") acc.Rejected++;
-          return acc;
-        },
-        { name: `Week ${4 - i}`, Received: 0, Approved: 0, Rejected: 0 }
-      );
-
-      weeks.unshift(weekStats); // Add to start of array for chronological order
+        break;
+      default:
+        return res
+          .status(403)
+          .json({
+            status: "error",
+            message: "No dashboard data available for this role.",
+          });
     }
 
     return res.status(200).json({
       status: "success",
-      message: "Staff dashboard stats retrieved successfully",
-      data: weeks,
+      message: "Dashboard data retrieved successfully",
+      data: dashboardData,
     });
-  } catch (err) {
-    console.error("Error fetching staff dashboard stats:", err);
+  } catch (error) {
+    console.error("Error fetching dashboard data:", error);
     return res.status(500).json({
       status: "error",
-      message: "Failed to fetch staff dashboard data",
-    });
-  }
-};
-
-exports.getSubDeanDashboardStats = async (req, res) => {
-  try {
-    const subDeanId = req.user.id;
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-    // Get all responses that need sub-dean approval
-    const formResponses = await FormResponse.findAll({
-      include: [
-        {
-          model: Form,
-          attributes: ["title"],
-        },
-        {
-          model: Approval,
-          where: {
-            approver_id: subDeanId,
-            updatedAt: {
-              [Op.between]: [startOfMonth, endOfMonth],
-            },
-          },
-        },
-      ],
-    });
-
-    // Group responses by form type
-    const formStats = formResponses.reduce((acc, response) => {
-      const formName = response.Form?.title || "Others";
-
-      if (!acc[formName]) {
-        acc[formName] = {
-          name: formName,
-          Received: 0,
-          Processed: 0,
-          Returned: 0,
-        };
-      }
-
-      acc[formName].Received++;
-
-      const approval = response.Approvals[0];
-      if (approval.status === "approved") {
-        acc[formName].Processed++;
-      } else if (approval.status === "rejected") {
-        acc[formName].Returned++;
-      }
-
-      return acc;
-    }, {});
-
-    // Convert to array format
-    const stats = Object.values(formStats);
-
-    return res.status(200).json({
-      status: "success",
-      message: "Sub Dean dashboard stats retrieved successfully",
-      data: stats,
-    });
-  } catch (err) {
-    console.error("Error fetching sub dean dashboard stats:", err);
-    return res.status(500).json({
-      status: "error",
-      message: "Failed to fetch sub dean dashboard data",
+      message: "An error occurred while retrieving dashboard data.",
+      data: null,
     });
   }
 };
