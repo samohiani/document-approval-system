@@ -19,6 +19,7 @@ exports.getUserFormSubmissions = async (req, res) => {
     });
 
     const formatted = submissions.map((submission) => ({
+      id: submission.id,
       form_id: submission.form.id,
       form_title: submission.form.title,
       form_description: submission.form.description,
@@ -55,7 +56,7 @@ exports.getSubmissionById = async (req, res) => {
         {
           model: ResponseDetail,
           as: "details",
-          attributes: ["question_id", "answer_text", "option_id"],
+          attributes: ["question_id", "answer_text"], // Removed "option_id"
         },
         {
           model: Approval, // Include Approval model
@@ -97,7 +98,7 @@ exports.getSubmissionById = async (req, res) => {
       details: submission.details.map((detail) => ({
         question_id: detail.question_id,
         answer_text: detail.answer_text,
-        option_id: detail.option_id,
+        // option_id: detail.option_id, // Removed "option_id"
       })),
       approvals: submission.approvals
         ? submission.approvals.map((approval) => ({
@@ -108,7 +109,7 @@ exports.getSubmissionById = async (req, res) => {
             created_on: approval.created_on,
             updated_on: approval.updated_on,
           }))
-        : [], 
+        : [],
     };
 
     res.status(200).json({
