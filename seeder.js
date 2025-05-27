@@ -14,6 +14,10 @@ async function seed() {
       Role.create({ name: "admin" }),
       Role.create({ name: "dean" }),
       Role.create({ name: "hod" }),
+      Role.create({ name: "college dean" }),
+      Role.create({ name: "dean SPS" }),
+      Role.create({ name: "sub-dean SPS" }),
+      Role.create({ name: "PG coordinator" }),
     ]);
     console.log("Roles created.");
 
@@ -61,13 +65,64 @@ async function seed() {
       college_id: colleges[0].id,
       department_id: departments[0].id,
     });
-    // Staff user
+    // Dean user
     await User.create({
-      first_name: "Staff",
+      first_name: "Dean",
       last_name: "User",
-      email: "staff@example.com",
+      email: "dean@example.com",
       password: hashedPassword,
       role_id: roles.find((r) => r.name === "dean").id,
+      college_id: colleges[0].id,
+    });
+
+    // HOD user
+    await User.create({
+      first_name: "HOD",
+      last_name: "User",
+      email: "hod@example.com",
+      password: hashedPassword,
+      role_id: roles.find((r) => r.name === "hod").id,
+      college_id: colleges[0].id,
+      department_id: departments[1].id,
+    });
+
+    // College Dean user
+    await User.create({
+      first_name: "College",
+      last_name: "Dean",
+      email: "collegedean@example.com",
+      password: hashedPassword,
+      role_id: roles.find((r) => r.name === "college dean").id,
+      college_id: colleges[0].id,
+    });
+
+    // Dean SPS user
+    await User.create({
+      first_name: "Dean",
+      last_name: "SPS",
+      email: "deansps@example.com",
+      password: hashedPassword,
+      role_id: roles.find((r) => r.name === "dean SPS").id,
+      college_id: colleges[1].id,
+    });
+
+    // Sub-dean SPS user
+    await User.create({
+      first_name: "Sub",
+      last_name: "Dean",
+      email: "subdean@example.com",
+      password: hashedPassword,
+      role_id: roles.find((r) => r.name === "sub-dean SPS").id,
+      college_id: colleges[2].id,
+    });
+
+    // PG Coordinator user
+    await User.create({
+      first_name: "PG",
+      last_name: "Coordinator",
+      email: "pgcoordinator@example.com",
+      password: hashedPassword,
+      role_id: roles.find((r) => r.name === "PG coordinator").id,
       college_id: colleges[0].id,
     });
 

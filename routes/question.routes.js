@@ -5,7 +5,7 @@ const auth = require("../middleware/auth");
 
 router.post("/", auth(2), questionController.addQuestion);
 
-router.put("/", auth(), questionController.getQuestionsForForm);
+router.get("/", auth(), questionController.getQuestionsForForm);
 
 router.put("/update", auth(2), questionController.updateQuestion);
 
