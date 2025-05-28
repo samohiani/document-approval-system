@@ -347,11 +347,10 @@ exports.submitResponse = async (req, res) => {
 exports.getFormProgress = async (req, res) => {
   try {
     const { response_id } = req.params;
-    const user_id = req.user.id;
 
     // Fetch the form response
     const formResponse = await FormResponse.findOne({
-      where: { id: response_id, user_id },
+      where: { id: response_id },
       include: [
         { model: Form, as: "form", attributes: ["title", "description"] },
       ],
@@ -392,7 +391,8 @@ exports.getFormProgress = async (req, res) => {
       approver: appr.approver
         ? {
             id: appr.approver.id,
-            name: appr.approver.full_name,
+            first_name: appr.approver.first_name,
+            last_name: appr.approver.last_name,
             email: appr.approver.email,
           }
         : null,
