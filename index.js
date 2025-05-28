@@ -11,7 +11,8 @@ const questionRoutes = require("./routes/question.routes");
 const responseRoutes = require("./routes/responses.routes");
 const approvalroutes = require("./routes/approval.routes");
 const dashboardroutes = require("./routes/dashboard.routes");
-const adminRoutes = require("./routes/admin.routes.js"); // Adjust path if necessary
+const adminRoutes = require("./routes/admin.routes"); 
+const notificationRoutes = require('./routes/notification.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -45,7 +46,9 @@ app.use("/api/questions", questionRoutes);
 app.use("/api/response", responseRoutes);
 app.use("/api/approval", approvalroutes);
 app.use("/api/dashboard", dashboardroutes);
-app.use("/api/admin", adminRoutes); // Or whatever base path you prefer for admin routes
+app.use("/api/admin", adminRoutes); 
+app.use('/api/notifications', notificationRoutes);
+
 
 const startServer = async () => {
   try {

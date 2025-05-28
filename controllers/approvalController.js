@@ -5,6 +5,10 @@ const ApprovalFlow = require("../models/approvalFlow");
 const ResponseDetail = require("../models/ResponseDetail");
 const Approval = require("../models/approval");
 const FormResponse = require("../models/formResponse");
+const {
+  createApprovalNotification,
+  createSystemNotification,
+} = require("../notification.utils");
 
 exports.createApprovalFlow = async (req, res) => {
   const { form_id, flow_definition } = req.body;
@@ -160,9 +164,26 @@ exports.handleApproval = async (req, res) => {
 
     // If rejected, update the whole form status
     const formResponse = await FormResponse.findByPk(approval.response_id);
+
+    // Get form details for notifications
+    const form = await Form.findByPk(formResponse.form_id);
+
     if (action === "rejected") {
       formResponse.status = "rejected";
       await formResponse.save();
+
+      // Notify the form initiator about rejection
+      await createApprovalNotification(
+        formResponse.user_id,
+        `Your ${form.title} form has been rejected`,
+        approval.id,
+        `Your form was reviewed but could not be approved at this time. ${
+          comment
+            ? `Reviewer comment: ${comment}`
+            : "No additional comments were provided."
+        }`
+      );
+
       return res
         .status(200)
         .json({ status: "success", message: "Form rejected." });
@@ -185,6 +206,15 @@ exports.handleApproval = async (req, res) => {
       // Final approval
       formResponse.status = "approved";
       await formResponse.save();
+
+      // Notify initiator about final approval
+      await createApprovalNotification(
+        formResponse.user_id,
+        `Your ${form.title} form has been fully approved`,
+        approval.id,
+        `Congratulations! Your form has completed all approval steps and has been fully approved.`
+      );
+
       return res
         .status(200)
         .json({ status: "success", message: "Form fully approved." });
@@ -221,12 +251,29 @@ exports.handleApproval = async (req, res) => {
 
     if (!approver) throw new Error("Next approver not found.");
 
-    await Approval.create({
+    // Create next approval entry
+    const newApproval = await Approval.create({
       response_id: formResponse.id,
       step_number: nextStep.step,
       role_required: nextStep.role_required,
       approver_id: approver.id,
     });
+
+    // Notify the initiator about progress
+    await createApprovalNotification(
+      formResponse.user_id,
+      `Your ${form.title} form has been approved at step ${approval.step_number}`,
+      approval.id,
+      `Your form has been approved at step ${approval.step_number} and has been forwarded to the next approver.`
+    );
+
+    // Notify the next approver
+    await createApprovalNotification(
+      approver.id,
+      `New ${form.title} form requires your approval`,
+      newApproval.id,
+      `A new form submission requires your review and approval. Please review it at your earliest convenience.`
+    );
 
     return res
       .status(200)

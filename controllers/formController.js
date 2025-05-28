@@ -6,6 +6,11 @@ const Role = require("../models/role");
 const ApprovalFlow = require("../models/approvalFlow");
 const ResponseDetail = require("../models/ResponseDetail");
 const Approval = require("../models/approval");
+const {
+  createFormNotification,
+  createApprovalNotification,
+  createSubmissionNotification,
+} = require("../notification.utils");
 
 exports.createForm = async (req, res) => {
   const { title, description } = req.body;
@@ -197,6 +202,14 @@ exports.submitResponse = async (req, res) => {
 
   try {
     const user = req.user;
+    const form = await Form.findByPk(form_id);
+
+    if (!form) {
+      return res.status(404).json({
+        status: "error",
+        message: "Form not found",
+      });
+    }
 
     // Create form response
     const formResponse = await FormResponse.create({
@@ -240,6 +253,15 @@ exports.submitResponse = async (req, res) => {
     if (!Array.isArray(flowDefinition) || flowDefinition.length === 0) {
       formResponse.status = "approved"; // Auto-approve
       await formResponse.save();
+
+      // Notify the user that their form has been auto-approved
+      await createFormNotification(
+        user.id,
+        `Your ${form.title} form has been automatically approved`,
+        form_id,
+        `Your submission has been automatically approved as no approval flow was defined for this form. No further action is required.`
+      );
+
       return res.status(201).json({
         status: "success",
         message:
@@ -259,6 +281,15 @@ exports.submitResponse = async (req, res) => {
       // This case handles if flowDefinition[0] is malformed.
       formResponse.status = "approved";
       await formResponse.save();
+
+      // Notify the user that their form has been auto-approved due to invalid flow
+      await createFormNotification(
+        user.id,
+        `Your ${form.title} form has been automatically approved`,
+        form_id,
+        `Your submission has been automatically approved as the approval flow configuration was invalid. No further action is required.`
+      );
+
       return res.status(201).json({
         status: "success",
         message:
@@ -320,13 +351,29 @@ exports.submitResponse = async (req, res) => {
     }
 
     // Create first approval entry
-    await Approval.create({
+    const approval = await Approval.create({
       response_id: formResponse.id,
       step_number: targetStepNumber,
       role_required: roleNameFromFlow,
       approver_id: approver.id,
       status: "pending", // Explicitly set status for new approval
     });
+
+    // Notify the submitter that their form has been submitted and is pending approval
+    await createSubmissionNotification(
+      user.id,
+      `Your ${form.title} form has been submitted successfully`,
+      formResponse.id,
+      `Your form has been submitted and is now awaiting approval. You will be notified when there are updates to your submission.`
+    );
+
+    // Notify the approver that they have a new form to review
+    await createApprovalNotification(
+      approver.id,
+      `New ${form.title} form requires your approval`,
+      approval.id,
+      `A new form submission from ${user.first_name} ${user.last_name} requires your review and approval. Please review it at your earliest convenience.`
+    );
 
     return res.status(201).json({
       status: "success",
@@ -352,7 +399,7 @@ exports.getFormProgress = async (req, res) => {
     const formResponse = await FormResponse.findOne({
       where: { id: response_id },
       include: [
-        { model: Form, as: "form", attributes: ["id","title", "description"] },
+        { model: Form, as: "form", attributes: ["id", "title", "description"] },
       ],
     });
 
