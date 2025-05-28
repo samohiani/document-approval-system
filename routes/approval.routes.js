@@ -13,7 +13,7 @@ router.get("/flow/:form_id", auth(2), approvalController.getApprovalFlowByFormId
 
 router.post(
   "/:approval_id/action",
-  auth([3, 4, 5, 6, 7]),
+  auth([3, 4, 5, 6, 7,8]),
   approvalController.handleApproval
 );
 

@@ -300,7 +300,7 @@ exports.submitResponse = async (req, res) => {
     } else {
       // For other roles like "Dean", "Dean SPS", generic "PG Coordinator" etc.
       const role = await Role.findOne({
-        where: { name: roleNameFromFlow }, // Use original casing for DB lookup
+        where: { name: roleRequiredLower }, // Use original casing for DB lookup
       });
       if (!role) {
         throw new Error(`Role '${roleNameFromFlow}' not found in Role table.`);
