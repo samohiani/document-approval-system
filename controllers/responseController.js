@@ -6,7 +6,6 @@ const Approval = require("../models/approval"); // Added Approval model
 exports.getUserFormSubmissions = async (req, res) => {
   try {
     const user_id = req.user.id;
-
     const submissions = await FormResponse.findAll({
       where: { user_id: user_id },
       include: [
@@ -20,9 +19,9 @@ exports.getUserFormSubmissions = async (req, res) => {
 
     const formatted = submissions.map((submission) => ({
       id: submission.id,
-      form_id: submission.form.id,
-      form_title: submission.form.title,
-      form_description: submission.form.description,
+      form_id: submission.form ? submission.form.id : null,
+      form_title: submission.form ? submission.form.title : "Unknown Form",
+      form_description: submission.form ? submission.form.description : "",
       status: submission.status,
       submitted_on: submission.created_on,
     }));

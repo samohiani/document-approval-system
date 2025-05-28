@@ -202,7 +202,7 @@ exports.submitResponse = async (req, res) => {
 
   try {
     const user = req.user;
-    const form = await Form.findByPk(form_id);
+    const form = await Form.findByPk(form_id );
 
     if (!form) {
       return res.status(404).json({
