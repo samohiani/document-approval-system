@@ -352,7 +352,7 @@ exports.getFormProgress = async (req, res) => {
     const formResponse = await FormResponse.findOne({
       where: { id: response_id },
       include: [
-        { model: Form, as: "form", attributes: ["title", "description"] },
+        { model: Form, as: "form", attributes: ["id","title", "description"] },
       ],
     });
 
@@ -405,6 +405,7 @@ exports.getFormProgress = async (req, res) => {
       status: "success",
       message: "Form progress retrieved successfully",
       data: {
+        id: formResponse.id,
         form: formResponse.form,
         submitted_on: formResponse.created_on,
         status: formResponse.status,
