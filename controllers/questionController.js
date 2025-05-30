@@ -49,7 +49,7 @@ exports.addQuestion = async (req, res) => {
 };
 
 exports.getQuestionsForForm = async (req, res) => {
-  const { form_id } = req.body;
+  const { form_id } = req.query; // Changed from req.params to req.query
 
   try {
     const questions = await Question.findAll({

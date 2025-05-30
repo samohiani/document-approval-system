@@ -7,6 +7,8 @@ router.post("/", auth(2), formController.createForm);
 
 router.get("/", auth([2, 1]), formController.getForms);
 
+router.get("/initiatable", auth(), formController.getInitiatableForms);
+
 router.get("/:id", auth(), formController.getFormById);
 
 router.put("/edit", auth(2), formController.updateForm);
@@ -16,7 +18,5 @@ router.put("/delete", auth(2), formController.deleteForm);
 router.post("/:form_id/submit", auth([1, 3, 7]), formController.submitResponse);
 
 router.get("/:response_id/progress", auth(), formController.getFormProgress);
-
-router.post("/initiatable", auth(), formController.getInitiatableForms);
 
 module.exports = router;

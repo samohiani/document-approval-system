@@ -8,6 +8,7 @@ const Question = require("./question");
 const FormResponse = require("./formResponse");
 const ResponseDetail = require("./ResponseDetail");
 const Approval = require("./approval");
+const Notification = require("./notification")
 
 // Role and User
 Role.hasMany(User, { foreignKey: "role_id" });
@@ -56,6 +57,11 @@ ResponseDetail.belongsTo(Question, {
 
 Approval.belongsTo(User, { foreignKey: "approver_id", as: "approver" });
 User.hasMany(Approval, { foreignKey: "approver_id", as: "approvals" });
+
+// User and Notification
+// User.hasMany(Notification, { foreignKey: "user_id", as: "notifications" });
+// Notification.belongsTo(User, { foreignKey: "user_id", as: "user"})
+
 module.exports = {
   Role,
   User,
@@ -67,4 +73,5 @@ module.exports = {
   ResponseDetail,
   Approval,
   ApprovalFlow,
+  Notification
 };

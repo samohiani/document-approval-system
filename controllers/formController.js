@@ -6,6 +6,11 @@ const Role = require("../models/role");
 const ApprovalFlow = require("../models/approvalFlow");
 const ResponseDetail = require("../models/ResponseDetail");
 const Approval = require("../models/approval");
+const {
+  createFormNotification,
+  createApprovalNotification,
+  createSubmissionNotification,
+} = require("../notification.utils");
 
 exports.createForm = async (req, res) => {
   const { title, description } = req.body;
@@ -197,12 +202,20 @@ exports.submitResponse = async (req, res) => {
 
   try {
     const user = req.user;
+    const form = await Form.findByPk(form_id );
+
+    if (!form) {
+      return res.status(404).json({
+        status: "error",
+        message: "Form not found",
+      });
+    }
 
     // Create form response
     const formResponse = await FormResponse.create({
       form_id,
       user_id: user.id,
-      status: "pending",
+      status: "pending", // Initial status
     });
 
     // Save answers
@@ -218,69 +231,162 @@ exports.submitResponse = async (req, res) => {
 
     // Get approval flow
     const approvalFlow = await ApprovalFlow.findOne({ where: { form_id } });
-    if (!approvalFlow) throw new Error("Approval flow not found for form.");
 
-    let flowDefinition = approvalFlow.flow_definition;
-    if (typeof flowDefinition === "string") {
-      flowDefinition = JSON.parse(flowDefinition);
+    let flowDefinition;
+    if (approvalFlow && approvalFlow.flow_definition) {
+      if (typeof approvalFlow.flow_definition === "string") {
+        try {
+          flowDefinition = JSON.parse(approvalFlow.flow_definition);
+        } catch (parseError) {
+          console.error("Error parsing flow_definition:", parseError);
+          // Treat as if no valid flow definition exists
+          flowDefinition = [];
+        }
+      } else {
+        flowDefinition = approvalFlow.flow_definition;
+      }
+    } else {
+      flowDefinition = [];
     }
 
-    const step2 = flowDefinition[1]; // step 2 approver
-    const roleRequired = step2.role_required.toLowerCase();
+    // If no approval steps are defined, or flow definition is empty
+    if (!Array.isArray(flowDefinition) || flowDefinition.length === 0) {
+      formResponse.status = "approved"; // Auto-approve
+      await formResponse.save();
 
-    // Find user for step 2
+      // Notify the user that their form has been auto-approved
+      await createFormNotification(
+        user.id,
+        `Your ${form.title} form has been automatically approved`,
+        form_id,
+        `Your submission has been automatically approved as no approval flow was defined for this form. No further action is required.`
+      );
+
+      return res.status(201).json({
+        status: "success",
+        message:
+          "Form submitted and automatically approved (no approval flow defined or flow is empty).",
+        data: formResponse,
+      });
+    }
+
+    // Target the first step in the defined flow.
+    const firstDefinedApproverStep = flowDefinition[0];
+
+    if (
+      !firstDefinedApproverStep ||
+      !firstDefinedApproverStep.step ||
+      !firstDefinedApproverStep.role_required
+    ) {
+      // This case handles if flowDefinition[0] is malformed.
+      formResponse.status = "approved";
+      await formResponse.save();
+
+      // Notify the user that their form has been auto-approved due to invalid flow
+      await createFormNotification(
+        user.id,
+        `Your ${form.title} form has been automatically approved`,
+        form_id,
+        `Your submission has been automatically approved as the approval flow configuration was invalid. No further action is required.`
+      );
+
+      return res.status(201).json({
+        status: "success",
+        message:
+          "Form submitted and automatically approved (first approval step in flow was invalid).",
+        data: formResponse,
+      });
+    }
+
+    const targetStepForApproval = firstDefinedApproverStep;
+    const targetStepNumber = targetStepForApproval.step;
+    const roleNameFromFlow = targetStepForApproval.role_required;
+    const roleRequiredLower = roleNameFromFlow.toLowerCase();
+
+    // Find user for this step
     let approver;
-    if (roleRequired.includes("departmental")) {
+    // Note: Role IDs are based on your provided seeded data:
+    // HOD: 4, PG Coordinator: 8
+    if (roleRequiredLower === "departmental pg coordinator") {
       approver = await User.findOne({
         where: {
-          role_id: 7,
+          role_id: 8, // PG Coordinator
           department_id: user.department_id,
         },
       });
-    } else if (roleRequired.includes("college")) {
+    } else if (roleRequiredLower === "college pg coordinator") {
       approver = await User.findOne({
         where: {
-          role_id: 7,
+          role_id: 8, // PG Coordinator
           college_id: user.college_id,
         },
       });
-    } else if (roleRequired === "hod") {
+    } else if (roleRequiredLower === "hod") {
       approver = await User.findOne({
         where: {
-          role_id: 3,
+          role_id: 4, // HOD
           department_id: user.department_id,
         },
       });
     } else {
-      // global roles like dean SPS
+      // For other roles like "Dean", "Dean SPS", generic "PG Coordinator" etc.
       const role = await Role.findOne({
-        where: { name: step2.role_required },
+        where: { name: roleRequiredLower }, // Use original casing for DB lookup
       });
+      if (!role) {
+        throw new Error(`Role '${roleNameFromFlow}' not found in Role table.`);
+      }
+      // This assumes that if a role (e.g. "Dean") can be college-specific,
+      // the `roleNameFromFlow` would be more specific (e.g., "College Dean", ID 5)
+      // or the User model/query needs further refinement for context.
       approver = await User.findOne({
         where: { role_id: role.id },
       });
     }
 
-    if (!approver)
-      throw new Error(`Approver for role ${roleRequired} not found.`);
+    if (!approver) {
+      throw new Error(
+        `Approver for role '${roleNameFromFlow}' (step ${targetStepNumber}) not found.`
+      );
+    }
 
     // Create first approval entry
-    await Approval.create({
+    const approval = await Approval.create({
       response_id: formResponse.id,
-      step_number: 2,
-      role_required: step2.role_required,
+      step_number: targetStepNumber,
+      role_required: roleNameFromFlow,
       approver_id: approver.id,
+      status: "pending", // Explicitly set status for new approval
     });
+
+    // Notify the submitter that their form has been submitted and is pending approval
+    await createSubmissionNotification(
+      user.id,
+      `Your ${form.title} form has been submitted successfully`,
+      formResponse.id,
+      `Your form has been submitted and is now awaiting approval. You will be notified when there are updates to your submission.`
+    );
+
+    // Notify the approver that they have a new form to review
+    await createApprovalNotification(
+      approver.id,
+      `New ${form.title} form requires your approval`,
+      approval.id,
+      `A new form submission from ${user.first_name} ${user.last_name} requires your review and approval. Please review it at your earliest convenience.`
+    );
 
     return res.status(201).json({
       status: "success",
       message: "Form submitted and routed for approval.",
+      data: formResponse,
     });
   } catch (error) {
-    console.error("Submit response error:", error.message);
+    console.error("Submit response error:", error.message, error.stack); // Log full stack
+    // Ensure formResponse status is not left hanging if created
+    // Depending on policy, you might want to mark formResponse as 'failed' or clean it up
     return res.status(500).json({
       status: "error",
-      message: "Submission failed",
+      message: error.message || "Submission failed due to an internal error.",
     });
   }
 };
@@ -288,13 +394,12 @@ exports.submitResponse = async (req, res) => {
 exports.getFormProgress = async (req, res) => {
   try {
     const { response_id } = req.params;
-    const user_id = req.user.id;
 
     // Fetch the form response
     const formResponse = await FormResponse.findOne({
-      where: { id: response_id, user_id },
+      where: { id: response_id },
       include: [
-        { model: Form, as: "form", attributes: ["title", "description"] },
+        { model: Form, as: "form", attributes: ["id", "title", "description"] },
       ],
     });
 
@@ -333,7 +438,8 @@ exports.getFormProgress = async (req, res) => {
       approver: appr.approver
         ? {
             id: appr.approver.id,
-            name: appr.approver.full_name,
+            first_name: appr.approver.first_name,
+            last_name: appr.approver.last_name,
             email: appr.approver.email,
           }
         : null,
@@ -346,6 +452,7 @@ exports.getFormProgress = async (req, res) => {
       status: "success",
       message: "Form progress retrieved successfully",
       data: {
+        id: formResponse.id,
         form: formResponse.form,
         submitted_on: formResponse.created_on,
         status: formResponse.status,

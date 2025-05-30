@@ -1,7 +1,7 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db.js");
-const User = require("./user");
-const FormResponse = require("./formResponse");
+const User = require("./user.js");
+const FormResponse = require("./formResponse.js");
 
 const Approval = sequelize.define(
   "Approval",
