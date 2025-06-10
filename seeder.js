@@ -12,12 +12,12 @@ async function seed() {
     const roles = await Promise.all([
       Role.create({ name: "student" }),
       Role.create({ name: "admin" }),
-      Role.create({ name: "dean" }),
-      Role.create({ name: "hod" }),
       Role.create({ name: "college dean" }),
+      Role.create({ name: "hod" }),
       Role.create({ name: "dean sps" }),
       Role.create({ name: "sub-dean sps" }),
-      Role.create({ name: "pg coordinator" }),
+      Role.create({ name: "college pg coordinator" }),
+      Role.create({ name: "departmental pg coordinator" }),
     ]);
     console.log("Roles created.");
 
@@ -65,15 +65,6 @@ async function seed() {
       college_id: colleges[0].id,
       department_id: departments[0].id,
     });
-    // Dean user
-    await User.create({
-      first_name: "Dean",
-      last_name: "User",
-      email: "dean@example.com",
-      password: hashedPassword,
-      role_id: roles.find((r) => r.name === "dean").id,
-      college_id: colleges[0].id,
-    });
 
     // HOD user
     await User.create({
@@ -116,13 +107,22 @@ async function seed() {
       college_id: colleges[2].id,
     });
 
-    // PG Coordinator user
+    // College PG Coordinator user
     await User.create({
-      first_name: "PG",
+      first_name: "College PG",
       last_name: "Coordinator",
-      email: "pgcoordinator@example.com",
+      email: "col-pgcoordinator@example.com",
       password: hashedPassword,
-      role_id: roles.find((r) => r.name === "pg coordinator").id,
+      role_id: roles.find((r) => r.name === "college pg coordinator").id,
+      college_id: colleges[0].id,
+    });
+    // Departmental PG Coordinator user
+    await User.create({
+      first_name: "Departmental PG",
+      last_name: "Coordinator",
+      email: "dep-pgcoordinator@example.com",
+      password: hashedPassword,
+      role_id: roles.find((r) => r.name === "departmental pg coordinator").id,
       college_id: colleges[0].id,
     });
 

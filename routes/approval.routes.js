@@ -9,11 +9,15 @@ router.get("/flow", auth(2), approvalController.getApprovalFlows);
 
 router.put("/flow", auth(2), approvalController.updateFormApprovalFlow);
 
-router.get("/flow/:form_id", auth([2,3, 4, 5, 6, 7,8]), approvalController.getApprovalFlowByFormId);
+router.get(
+  "/flow/:form_id",
+  auth([2, 3, 4, 5, 6, 7, 8]),
+  approvalController.getApprovalFlowByFormId
+);
 
 router.post(
   "/:approval_id/action",
-  auth([3, 4, 5, 6, 7,8]),
+  auth([3, 4, 5, 6, 7, 8]),
   approvalController.handleApproval
 );
 

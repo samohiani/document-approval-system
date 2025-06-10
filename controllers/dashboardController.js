@@ -192,11 +192,7 @@ async function getApproverDashboardData(
   }
 
   // Contextual data for Deans (role_id 3 for general Dean, 5 for College Dean)
-  if (
-    (userRole.name.toLowerCase() === "dean" ||
-      userRole.name.toLowerCase() === "college dean") &&
-    userCollegeId
-  ) {
+  if (userRole.name.toLowerCase() === "college dean" && userCollegeId) {
     data.collegeSubmissionsCount = await FormResponse.count({
       include: [
         {
@@ -235,12 +231,12 @@ exports.getDashboardData = async (req, res) => {
       case "student": // role_id 1
         dashboardData = await getStudentDashboardData(userId);
         break;
-      case "dean": // role_id 3
+      case "college dean": // role_id 3
       case "hod": // role_id 4
-      case "college dean": // role_id 5
-      case "dean sps": // role_id 6
-      case "sub-dean sps": // role_id 7
-      case "pg coordinator": // role_id 8
+      case "dean sps": // role_id 5
+      case "sub-dean sps": // role_id 6
+      case "college pg coordinator": // role_id 7
+      case "departmental pg coordinator": // role_id 8
         dashboardData = await getApproverDashboardData(
           userId,
           user.role,
@@ -249,12 +245,10 @@ exports.getDashboardData = async (req, res) => {
         );
         break;
       default:
-        return res
-          .status(403)
-          .json({
-            status: "error",
-            message: "No dashboard data available for this role.",
-          });
+        return res.status(403).json({
+          status: "error",
+          message: "No dashboard data available for this role.",
+        });
     }
 
     return res.status(200).json({
