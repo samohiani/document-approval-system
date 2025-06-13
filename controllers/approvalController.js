@@ -7,7 +7,6 @@ const Approval = require("../models/approval");
 const FormResponse = require("../models/formResponse");
 const {
   createApprovalNotification,
-  createSystemNotification,
 } = require("../notification.utils");
 
 exports.createApprovalFlow = async (req, res) => {
@@ -218,38 +217,88 @@ exports.handleApproval = async (req, res) => {
       return res
         .status(200)
         .json({ status: "success", message: "Form fully approved." });
-    }
-
-    // Find next approver
+    } // Find next approver
     let approver;
     const initiator = await User.findByPk(formResponse.user_id);
-    const role = nextStep.role_required.toLowerCase();
+    const roleRequiredLower = nextStep.role_required.toLowerCase();
 
-    if (role.includes("departmental")) {
+    // Note: Role IDs are based on seeded data:
+    // student: 1, admin: 2, college dean: 3, hod: 4, dean sps: 5, sub-dean sps: 6, college pg coordinator: 7, departmental pg coordinator: 8
+    if (roleRequiredLower === "departmental pg coordinator") {
       approver = await User.findOne({
         where: {
-          role_id: 7,
+          role_id: 8, // Departmental PG Coordinator
           department_id: initiator.department_id,
         },
       });
-    } else if (role.includes("college")) {
+
+      // If no departmental PG coordinator found, try to find any PG coordinator in the same college
+      if (!approver) {
+        approver = await User.findOne({
+          where: {
+            role_id: 8, // Departmental PG Coordinator
+            college_id: initiator.college_id,
+          },
+        });
+      }
+    } else if (roleRequiredLower === "college pg coordinator") {
       approver = await User.findOne({
-        where: { role_id: 7, college_id: initiator.college_id },
+        where: {
+          role_id: 7, // College PG Coordinator
+          college_id: initiator.college_id,
+        },
       });
-    } else if (role === "hod") {
+    } else if (roleRequiredLower === "hod") {
       approver = await User.findOne({
-        where: { role_id: 3, department_id: initiator.department_id },
+        where: {
+          role_id: 4, // HOD
+          department_id: initiator.department_id,
+        },
       });
+
+      // If no HOD found in the same department, try to find any HOD in the same college
+      if (!approver) {
+        approver = await User.findOne({
+          where: {
+            role_id: 4, // HOD
+            college_id: initiator.college_id,
+          },
+        });
+      }
     } else {
-      const role = await Role.findOne({
+      // For other roles like "college dean", "dean sps", "sub-dean sps", etc.
+      const roleRecord = await Role.findOne({
         where: { name: nextStep.role_required },
       });
-      approver = await User.findOne({
-        where: { role_id: role.id },
-      });
+      if (!roleRecord) {
+        throw new Error(
+          `Role '${nextStep.role_required}' not found in Role table.`
+        );
+      }
+
+      // Try to find the approver with contextual matching (college/department)
+      if (initiator.college_id) {
+        approver = await User.findOne({
+          where: {
+            role_id: roleRecord.id,
+            college_id: initiator.college_id,
+          },
+        });
+      }
+
+      // If no college-specific approver found, try general lookup
+      if (!approver) {
+        approver = await User.findOne({
+          where: { role_id: roleRecord.id },
+        });
+      }
     }
 
-    if (!approver) throw new Error("Next approver not found.");
+    if (!approver) {
+      throw new Error(
+        `Next approver for role '${nextStep.role_required}' (step ${nextStep.step}) not found.`
+      );
+    }
 
     // Create next approval entry
     const newApproval = await Approval.create({
