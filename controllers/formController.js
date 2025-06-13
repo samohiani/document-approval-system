@@ -202,7 +202,7 @@ exports.submitResponse = async (req, res) => {
 
   try {
     const user = req.user;
-    const form = await Form.findByPk(form_id );
+    const form = await Form.findByPk(form_id);
 
     if (!form) {
       return res.status(404).json({
@@ -301,9 +301,7 @@ exports.submitResponse = async (req, res) => {
     const targetStepForApproval = firstDefinedApproverStep;
     const targetStepNumber = targetStepForApproval.step;
     const roleNameFromFlow = targetStepForApproval.role_required;
-    const roleRequiredLower = roleNameFromFlow.toLowerCase();
-
-    // Find user for this step
+    const roleRequiredLower = roleNameFromFlow.toLowerCase(); // Find user for this step
     let approver;
     // Note: Role IDs are based on your provided seeded data:
     // HOD: 4, PG Coordinator: 8
@@ -314,6 +312,16 @@ exports.submitResponse = async (req, res) => {
           department_id: user.department_id,
         },
       });
+
+      // If no departmental PG coordinator found, try to find any PG coordinator in the same college
+      if (!approver) {
+        approver = await User.findOne({
+          where: {
+            role_id: 8, // PG Coordinator
+            college_id: user.college_id,
+          },
+        });
+      }
     } else if (roleRequiredLower === "college pg coordinator") {
       approver = await User.findOne({
         where: {
@@ -328,6 +336,16 @@ exports.submitResponse = async (req, res) => {
           department_id: user.department_id,
         },
       });
+
+      // If no HOD found in the same department, try to find any HOD in the same college
+      if (!approver) {
+        approver = await User.findOne({
+          where: {
+            role_id: 4, // HOD
+            college_id: user.college_id,
+          },
+        });
+      }
     } else {
       // For other roles like "Dean", "Dean SPS", generic "PG Coordinator" etc.
       const role = await Role.findOne({
@@ -336,18 +354,42 @@ exports.submitResponse = async (req, res) => {
       if (!role) {
         throw new Error(`Role '${roleNameFromFlow}' not found in Role table.`);
       }
-      // This assumes that if a role (e.g. "Dean") can be college-specific,
-      // the `roleNameFromFlow` would be more specific (e.g., "College Dean", ID 5)
-      // or the User model/query needs further refinement for context.
-      approver = await User.findOne({
-        where: { role_id: role.id },
-      });
+
+      // Try to find the approver with contextual matching (college/department)
+      if (user.college_id) {
+        approver = await User.findOne({
+          where: {
+            role_id: role.id,
+            college_id: user.college_id,
+          },
+        });
+      }
+
+      // If no college-specific approver found, try general lookup
+      if (!approver) {
+        approver = await User.findOne({
+          where: { role_id: role.id },
+        });
+      }
     }
 
     if (!approver) {
-      throw new Error(
-        `Approver for role '${roleNameFromFlow}' (step ${targetStepNumber}) not found.`
+      // Instead of throwing an error, auto-approve and notify
+      formResponse.status = "approved";
+      await formResponse.save();
+
+      await createFormNotification(
+        user.id,
+        `Your ${form.title} form has been automatically approved`,
+        form_id,
+        `Your submission has been automatically approved as no suitable approver was found for the role '${roleNameFromFlow}'. No further action is required.`
       );
+
+      return res.status(201).json({
+        status: "success",
+        message: `Form submitted and automatically approved (no approver found for role '${roleNameFromFlow}').`,
+        data: formResponse,
+      });
     }
 
     // Create first approval entry

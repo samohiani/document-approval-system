@@ -62,26 +62,44 @@ async function seed() {
       email: "student@example.com",
       password: hashedPassword,
       role_id: roles.find((r) => r.name === "student").id,
-      college_id: colleges[0].id,
+      college_id: colleges[1].id,
       department_id: departments[0].id,
-    });
-
-    // HOD user
+    }); // HOD user for Mechanical Engineering
     await User.create({
-      first_name: "HOD",
-      last_name: "User",
-      email: "hod@example.com",
+      first_name: "HOD Mechanical",
+      last_name: "Engineering",
+      email: "hod-mech@example.com",
       password: hashedPassword,
       role_id: roles.find((r) => r.name === "hod").id,
       college_id: colleges[0].id,
       department_id: departments[1].id,
     });
 
+    // HOD user for Computer Science
+    await User.create({
+      first_name: "HOD Computer",
+      last_name: "Science",
+      email: "hod-cs@example.com",
+      password: hashedPassword,
+      role_id: roles.find((r) => r.name === "hod").id,
+      college_id: colleges[1].id,
+      department_id: departments[0].id,
+    });
+
     // College Dean user
     await User.create({
-      first_name: "College",
+      first_name: "CST",
       last_name: "Dean",
-      email: "collegedean@example.com",
+      email: "cstdean@example.com",
+      password: hashedPassword,
+      role_id: roles.find((r) => r.name === "college dean").id,
+      college_id: colleges[1].id,
+    });
+
+    await User.create({
+      first_name: "COE",
+      last_name: "Dean",
+      email: "coedean@example.com",
       password: hashedPassword,
       role_id: roles.find((r) => r.name === "college dean").id,
       college_id: colleges[0].id,
@@ -115,15 +133,17 @@ async function seed() {
       password: hashedPassword,
       role_id: roles.find((r) => r.name === "college pg coordinator").id,
       college_id: colleges[0].id,
-    });
-    // Departmental PG Coordinator user
+    }); 
+    
+    // Departmental PG Coordinator user for Computer Science
     await User.create({
       first_name: "Departmental PG",
       last_name: "Coordinator",
       email: "dep-pgcoordinator@example.com",
       password: hashedPassword,
       role_id: roles.find((r) => r.name === "departmental pg coordinator").id,
-      college_id: colleges[0].id,
+      college_id: colleges[1].id,
+      department_id: departments[0].id,
     });
 
     console.log("Users created.");
