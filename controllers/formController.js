@@ -13,7 +13,7 @@ const {
 } = require("../notification.utils");
 
 exports.createForm = async (req, res) => {
-  const { title, description } = req.body;
+  const { title, description, initiator } = req.body;
 
   if (!title || !description) {
     return res.status(400).json({
@@ -27,6 +27,7 @@ exports.createForm = async (req, res) => {
     const form = await Form.create({
       title,
       description,
+      initiator,
       created_by: req.user.id,
     });
 
@@ -524,24 +525,11 @@ exports.getInitiatableForms = async (req, res) => {
         .status(400)
         .json({ status: "error", message: "Invalid user role" });
     }
-
     let contextualRole = role.name.toLowerCase();
-    if (contextualRole === "pg coordinator") {
-      if (user.department_id) {
-        contextualRole = "departmental pg coordinator";
-      } else if (user.college_id) {
-        contextualRole = "college pg coordinator";
-      }
-    }
 
-    const forms = await Form.findAll({
+    const initiatableForms = await Form.findAll({
+      where: { initiator: contextualRole },
       include: [{ model: ApprovalFlow, as: "approvalFlow" }],
-    });
-
-    const initiatableForms = forms.filter((form) => {
-      const flow = form.approvalFlow?.flow_definition;
-      if (!flow || !Array.isArray(flow)) return false;
-      return flow[0]?.role_required.toLowerCase() === contextualRole;
     });
 
     return res.status(200).json({
