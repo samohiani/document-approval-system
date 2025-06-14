@@ -132,7 +132,7 @@ async function seed() {
       email: "col-pgcoordinator@example.com",
       password: hashedPassword,
       role_id: roles.find((r) => r.name === "college pg coordinator").id,
-      college_id: colleges[0].id,
+      college_id: colleges[1].id,
     }); 
     
     // Departmental PG Coordinator user for Computer Science
