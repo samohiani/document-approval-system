@@ -13,8 +13,8 @@ const Form = sequelize.define(
       allowNull: false,
     },
     initiator: {
-      type: String,
-      required: true,
+      type: DataTypes.STRING,
+      allowNull: false,
     },
     created_by: {
       type: DataTypes.INTEGER,

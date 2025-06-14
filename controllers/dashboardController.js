@@ -79,49 +79,18 @@ async function getStudentDashboardData(userId) {
     }),
   };
 
-  // Simplified initiatable forms count (actual logic might be more complex as in formController)
-  // This requires knowing the user's role and potentially department/college
-  // For a basic version, we can count forms that have an approval flow defined
-  // A more accurate count would replicate the logic from formController.getInitiatableForms
   const user = await User.findByPk(userId, {
     include: [{ model: Role, as: "role" }],
   });
   let initiatableFormsCount = 0;
   if (user && user.role) {
-    const allForms = await Form.findAll({
-      include: [
-        {
-          model: ApprovalFlow,
-          as: "approvalFlow",
-          where: { flow_definition: { [Op.ne]: null } },
-          required: true,
-        },
-      ],
-      where: { deleted_flag: false },
-    });
-
-    let contextualRole = user.role.name.toLowerCase();
-    if (contextualRole === "pg coordinator") {
-      // Example contextual role logic
-      if (user.department_id) contextualRole = "departmental pg coordinator";
-      else if (user.college_id) contextualRole = "college pg coordinator";
+    {
+      const contextualRole = user.role.name.toLowerCase();
+      initiatableFormsCount = await Form.count({
+        where: { initiator: contextualRole, deleted_flag: false },
+      });
     }
-
-    initiatableFormsCount = allForms.filter((form) => {
-      try {
-        let flowDef = form.approvalFlow?.flow_definition;
-        if (typeof flowDef === "string") flowDef = JSON.parse(flowDef);
-        return (
-          Array.isArray(flowDef) &&
-          flowDef.length > 0 &&
-          flowDef[0]?.role_required?.toLowerCase() === contextualRole
-        );
-      } catch (e) {
-        return false;
-      }
-    }).length;
   }
-
   return {
     myTotalSubmissions,
     mySubmissionsStatus,

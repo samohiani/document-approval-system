@@ -12,6 +12,23 @@ const {
   createSubmissionNotification,
 } = require("../notification.utils");
 
+// Utility function to check if user can access a form
+const canUserAccessForm = async (user, form) => {
+  // Admin can access all forms
+  if (user.role_id === 2) {
+    return true;
+  }
+
+  // Get user's role to compare with form initiator
+  const userRole = await Role.findByPk(user.role_id);
+  if (!userRole) {
+    return false;
+  }
+
+  // Check if user's role matches the form's initiator
+  return userRole.name.toLowerCase() === form.initiator.toLowerCase();
+};
+
 exports.createForm = async (req, res) => {
   const { title, description, initiator } = req.body;
 
@@ -48,20 +65,49 @@ exports.createForm = async (req, res) => {
 
 exports.getForms = async (req, res) => {
   try {
-    const forms = await Form.findAll({
-      where: { deleted_flag: false },
+    const user = req.user;
+
+    // If user is admin, return all forms
+    if (user.role_id === 2) {
+      const allForms = await Form.findAll({
+        where: { deleted_flag: false },
+        include: [{ model: ApprovalFlow, as: "approvalFlow" }],
+      });
+
+      return res.status(200).json({
+        status: "success",
+        message: "Initiatable forms retrieved",
+        data: allForms,
+      });
+    }
+
+    const role = await Role.findByPk(user.role_id);
+    if (!role) {
+      return res
+        .status(400)
+        .json({ status: "error", message: "Invalid user role" });
+    }
+
+    const contextualRole = role.name.toLowerCase();
+
+    const initiatableForms = await Form.findAll({
+      where: {
+        initiator: contextualRole,
+        deleted_flag: false,
+      },
+      include: [{ model: ApprovalFlow, as: "approvalFlow" }],
     });
+
     return res.status(200).json({
       status: "success",
-      message: "Forms retrieved successfully",
-      data: forms,
+      message: "Initiatable forms retrieved",
+      data: initiatableForms,
     });
   } catch (error) {
-    console.error("Error fetching forms:", error);
+    console.error("Error fetching initiatable forms:", error);
     return res.status(500).json({
       status: "error",
-      message: "An error occurred while retrieving forms",
-      data: [],
+      message: "Internal server error",
     });
   }
 };
@@ -71,6 +117,7 @@ exports.getFormById = async (req, res) => {
   const { id } = req.params;
 
   try {
+    const user = req.user;
     const form = await Form.findOne({
       where: { id, deleted_flag: false },
       include: [
@@ -87,6 +134,15 @@ exports.getFormById = async (req, res) => {
       return res.status(404).json({
         status: "error",
         message: "Form not found",
+        data: [],
+      });
+    }
+
+    // Check if user can access this form
+    if (!(await canUserAccessForm(user, form))) {
+      return res.status(403).json({
+        status: "error",
+        message: "Access denied. You are not authorized to view this form.",
         data: [],
       });
     }
@@ -108,7 +164,7 @@ exports.getFormById = async (req, res) => {
 
 // Update an existing form (Admin only)
 exports.updateForm = async (req, res) => {
-  const { id, title, description } = req.body;
+  const { id, title, description, initiator } = req.body;
 
   if (!title || !description) {
     return res.status(400).json({
@@ -119,6 +175,7 @@ exports.updateForm = async (req, res) => {
   }
 
   try {
+    const user = req.user;
     const form = await Form.findOne({ where: { id, deleted_flag: false } });
     if (!form) {
       return res.status(404).json({
@@ -128,8 +185,18 @@ exports.updateForm = async (req, res) => {
       });
     }
 
+    // Check if user can access this form
+    if (!(await canUserAccessForm(user, form))) {
+      return res.status(403).json({
+        status: "error",
+        message: "Access denied. You are not authorized to update this form.",
+        data: [],
+      });
+    }
+
     form.title = title;
     form.description = description;
+    form.initiator = initiator;
     form.modified_by = req.user.id;
     await form.save();
 
@@ -160,6 +227,7 @@ exports.deleteForm = async (req, res) => {
   }
 
   try {
+    const user = req.user;
     const form = await Form.findOne({
       where: { id: form_id, deleted_flag: false },
     });
@@ -167,6 +235,15 @@ exports.deleteForm = async (req, res) => {
       return res.status(404).json({
         status: "error",
         message: "Form not found",
+        data: [],
+      });
+    }
+
+    // Check if user can access this form
+    if (!(await canUserAccessForm(user, form))) {
+      return res.status(403).json({
+        status: "error",
+        message: "Access denied. You are not authorized to delete this form.",
         data: [],
       });
     }
@@ -200,7 +277,6 @@ exports.submitResponse = async (req, res) => {
       .status(400)
       .json({ status: "error", message: "Answers are required" });
   }
-
   try {
     const user = req.user;
     const form = await Form.findByPk(form_id);
@@ -209,6 +285,14 @@ exports.submitResponse = async (req, res) => {
       return res.status(404).json({
         status: "error",
         message: "Form not found",
+      });
+    }
+
+    // Check if user can access this form
+    if (!(await canUserAccessForm(user, form))) {
+      return res.status(403).json({
+        status: "error",
+        message: "Access denied. You are not authorized to submit this form.",
       });
     }
 
@@ -437,6 +521,7 @@ exports.submitResponse = async (req, res) => {
 exports.getFormProgress = async (req, res) => {
   try {
     const { response_id } = req.params;
+    const user = req.user;
 
     // Fetch the form response
     const formResponse = await FormResponse.findOne({
@@ -450,6 +535,28 @@ exports.getFormProgress = async (req, res) => {
       return res.status(404).json({
         status: "error",
         message: "Form response not found.",
+        data: [],
+      });
+    }
+
+    // Check access control: user can view their own submissions or if they're admin
+    // or if they're involved in the approval process
+    const isOwner = formResponse.user_id === user.id;
+    const isAdmin = user.role_id === 2;
+
+    // Check if user is involved in approval process
+    const isApprover = await Approval.findOne({
+      where: {
+        response_id: response_id,
+        approver_id: user.id,
+      },
+    });
+
+    if (!isOwner && !isAdmin && !isApprover) {
+      return res.status(403).json({
+        status: "error",
+        message:
+          "Access denied. You are not authorized to view this form progress.",
         data: [],
       });
     }
@@ -512,36 +619,6 @@ exports.getFormProgress = async (req, res) => {
       status: "error",
       message: "Internal server error while fetching form progress",
       data: [],
-    });
-  }
-};
-
-exports.getInitiatableForms = async (req, res) => {
-  try {
-    const user = req.user;
-    const role = await Role.findByPk(user.role_id);
-    if (!role) {
-      return res
-        .status(400)
-        .json({ status: "error", message: "Invalid user role" });
-    }
-    let contextualRole = role.name.toLowerCase();
-
-    const initiatableForms = await Form.findAll({
-      where: { initiator: contextualRole },
-      include: [{ model: ApprovalFlow, as: "approvalFlow" }],
-    });
-
-    return res.status(200).json({
-      status: "success",
-      message: "Initiatable forms retrieved",
-      data: initiatableForms,
-    });
-  } catch (error) {
-    console.error("Error fetching initiatable forms:", error);
-    return res.status(500).json({
-      status: "error",
-      message: "Internal server error",
     });
   }
 };
