@@ -5,9 +5,7 @@ const ApprovalFlow = require("../models/approvalFlow");
 const ResponseDetail = require("../models/ResponseDetail");
 const Approval = require("../models/approval");
 const FormResponse = require("../models/formResponse");
-const {
-  createApprovalNotification,
-} = require("../notification.utils");
+const { createApprovalNotification } = require("../notification.utils");
 
 exports.createApprovalFlow = async (req, res) => {
   const { form_id, flow_definition } = req.body;
@@ -409,6 +407,90 @@ exports.getPendingApprovals = async (req, res) => {
     res.status(500).json({
       status: "error",
       message: "Error fetching pending approvals",
+    });
+  }
+};
+
+exports.getApprovedApprovals = async (req, res) => {
+  const user_id = req.user.id;
+
+  try {
+    const approvals = await Approval.findAll({
+      where: {
+        approver_id: user_id,
+        status: "approved",
+      },
+      include: [
+        {
+          model: FormResponse,
+          as: "response",
+          include: [
+            {
+              model: Form,
+              as: "form",
+              attributes: ["title", "description"],
+            },
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "first_name", "last_name", "email"],
+            },
+          ],
+        },
+      ],
+    });
+
+    res.status(200).json({
+      status: "success",
+      data: approvals,
+    });
+  } catch (error) {
+    console.error("Error fetching pending approvals:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Error fetching pending approvals",
+    });
+  }
+};
+
+exports.getRejectedApprovals = async (req, res) => {
+  const user_id = req.user.id;
+
+  try {
+    const approvals = await Approval.findAll({
+      where: {
+        approver_id: user_id,
+        status: "rejected",
+      },
+      include: [
+        {
+          model: FormResponse,
+          as: "response",
+          include: [
+            {
+              model: Form,
+              as: "form",
+              attributes: ["title", "description"],
+            },
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "first_name", "last_name", "email"],
+            },
+          ],
+        },
+      ],
+    });
+
+    res.status(200).json({
+      status: "success",
+      data: approvals,
+    });
+  } catch (error) {
+    console.error("Error fetching rejected approvals:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Error fetching rejected approvals",
     });
   }
 };

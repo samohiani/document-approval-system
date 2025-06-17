@@ -44,7 +44,7 @@ exports.createForm = async (req, res) => {
     const form = await Form.create({
       title,
       description,
-      initiator,
+      initiator: initiator.toLowerCase(),
       created_by: req.user.id,
     });
 
