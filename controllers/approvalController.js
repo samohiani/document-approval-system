@@ -268,7 +268,7 @@ exports.handleApproval = async (req, res) => {
     } else {
       // For other roles like "college dean", "dean sps", "sub-dean sps", etc.
       const roleRecord = await Role.findOne({
-        where: { name: nextStep.role_required },
+        where: { name: nextStep.role_required.toLowerCase() },
       });
       if (!roleRecord) {
         throw new Error(
