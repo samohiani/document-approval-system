@@ -23,6 +23,10 @@ router.post(
 
 router.get("/pending", auth(), approvalController.getPendingApprovals);
 
+router.get("/approved", auth(), approvalController.getApprovedApprovals);
+
+router.get("/rejected", auth(), approvalController.getRejectedApprovals);
+
 router.get(
   "/details/:approval_id",
   auth(),
